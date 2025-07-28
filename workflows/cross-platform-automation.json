@@ -1,0 +1,471 @@
+{
+  "name": "Cross-Platform Social Media Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cross-platform-schedule",
+      "name": "Cross-Platform Schedule - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAllSheets",
+        "documentId": {
+          "__rl": true,
+          "value": "your-cross-platform-content-sheet-id",
+          "mode": "id"
+        }
+      },
+      "id": "unified-content-source",
+      "name": "Unified Content Source",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        460,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-platform content adapter\nconst items = $input.all();\nconst processedItems = [];\n\nfor (const item of items) {\n  const baseContent = item.json.content || '';\n  const imageUrl = item.json.image_url || '';\n  const platforms = (item.json.platforms || 'linkedin,instagram').split(',').map(p => p.trim());\n  const category = item.json.category || 'general';\n  const postType = item.json.post_type || 'post'; // post, story, article\n  \n  if (baseContent) {\n    // Create platform-specific versions\n    platforms.forEach(platform => {\n      let adaptedContent = baseContent;\n      let adaptedImageUrl = imageUrl;\n      \n      if (platform === 'linkedin') {\n        // LinkedIn optimizations\n        adaptedContent = adaptedContent.length > 3000 ? \n          adaptedContent.substring(0, 2997) + '...' : adaptedContent;\n        \n        // Add professional hashtags for LinkedIn\n        const linkedinHashtags = ['#professional', '#business', '#networking', '#career'];\n        adaptedContent += '\\n\\n' + linkedinHashtags.slice(0, 3).join(' ');\n        \n      } else if (platform === 'instagram') {\n        // Instagram optimizations\n        const instagramHashtags = {\n          business: ['#entrepreneur', '#startup', '#businessowner', '#success', '#growth'],\n          tech: ['#technology', '#innovation', '#digital', '#startup', '#tech'],\n          lifestyle: ['#lifestyle', '#inspiration', '#motivation', '#wellness'],\n          general: ['#instagood', '#photooftheday', '#follow', '#instadaily']\n        };\n        \n        const selectedHashtags = instagramHashtags[category] || instagramHashtags.general;\n        adaptedContent += '\\n\\n' + selectedHashtags.join(' ');\n        \n        // Ensure Instagram character limit\n        adaptedContent = adaptedContent.length > 2200 ? \n          adaptedContent.substring(0, 2197) + '...' : adaptedContent;\n      }\n      \n      processedItems.push({\n        json: {\n          ...item.json,\n          platform: platform,\n          content: adaptedContent,\n          originalContent: baseContent,\n          imageUrl: adaptedImageUrl,\n          category: category,\n          postType: postType,\n          timestamp: new Date().toISOString()\n        }\n      });\n    });\n  }\n}\n\nreturn processedItems;"
+      },
+      "id": "platform-adapter",
+      "name": "Platform Content Adapter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "platform-check",
+              "leftValue": "={{$json.platform}}",
+              "rightValue": "linkedin",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "linkedin-filter",
+      "name": "LinkedIn Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "platform-check",
+              "leftValue": "={{$json.platform}}",
+              "rightValue": "instagram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "instagram-filter",
+      "name": "Instagram Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "text": "={{$json.content}}",
+        "additionalFields": {
+          "visibility": "PUBLIC"
+        }
+      },
+      "id": "linkedin-cross-post",
+      "name": "LinkedIn Cross-Platform Post",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        250
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$json.imageUrl}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "instagram-image-download",
+      "name": "Instagram Image Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "upload",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{$json.content}}"
+        }
+      },
+      "id": "instagram-cross-post",
+      "name": "Instagram Cross-Platform Post",
+      "type": "n8n-nodes-base.instagram",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        450
+      ],
+      "credentials": {
+        "instagramBasicDisplayApi": {
+          "id": "instagram-credentials",
+          "name": "Instagram Basic Display API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "your-cross-platform-analytics-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": "Cross-Platform Analytics",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{new Date().toISOString().split('T')[0]}}",
+            "Time": "={{new Date().toISOString().split('T')[1].split('.')[0]}}",
+            "Platform": "={{$json.platform}}",
+            "Content": "={{$json.originalContent}}",
+            "Adapted Content": "={{$json.content}}",
+            "Category": "={{$json.category}}",
+            "Post ID": "={{$json.id}}",
+            "Status": "Posted Successfully",
+            "Image URL": "={{$json.imageUrl}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "cross-platform-analytics",
+      "name": "Cross-Platform Analytics Logger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1560,
+        350
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cross-platform-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cross-platform-webhook",
+      "name": "Cross-Platform Manual Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        700
+      ],
+      "webhookId": "cross-platform-manual"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\", \"message\": \"Cross-platform posting completed\", \"platforms\": [\"linkedin\", \"instagram\"], \"timestamp\": \"{{new Date().toISOString()}}\"}",
+        "options": {}
+      },
+      "id": "cross-platform-response",
+      "name": "Cross-Platform Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "send",
+        "chatId": "your-telegram-chat-id",
+        "text": "🚀 Cross-platform post published!\\n\\nPlatforms: {{$json.platform}}\\nContent: {{$json.originalContent.substring(0, 100)}}...\\n\\nPosted at: {{$json.timestamp}}"
+      },
+      "id": "telegram-notification",
+      "name": "Telegram Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        350
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-credentials",
+          "name": "Telegram API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Performance analytics aggregator\nconst items = $input.all();\nconst analytics = {\n  totalPosts: items.length,\n  platforms: {},\n  categories: {},\n  successRate: 0,\n  timestamp: new Date().toISOString()\n};\n\nlet successfulPosts = 0;\n\nfor (const item of items) {\n  const platform = item.json.platform;\n  const category = item.json.category;\n  const isSuccess = item.json.id ? true : false;\n  \n  if (isSuccess) successfulPosts++;\n  \n  // Platform stats\n  if (!analytics.platforms[platform]) {\n    analytics.platforms[platform] = { count: 0, successful: 0 };\n  }\n  analytics.platforms[platform].count++;\n  if (isSuccess) analytics.platforms[platform].successful++;\n  \n  // Category stats\n  if (!analytics.categories[category]) {\n    analytics.categories[category] = { count: 0, successful: 0 };\n  }\n  analytics.categories[category].count++;\n  if (isSuccess) analytics.categories[category].successful++;\n}\n\nanalytics.successRate = (successfulPosts / items.length) * 100;\n\nreturn [{ json: analytics }];"
+      },
+      "id": "performance-aggregator",
+      "name": "Performance Analytics Aggregator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        550
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cross-Platform Schedule - Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Unified Content Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unified Content Source": {
+      "main": [
+        [
+          {
+            "node": "Platform Content Adapter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Platform Content Adapter": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Filter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Instagram Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Filter": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Cross-Platform Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Filter": {
+      "main": [
+        [
+          {
+            "node": "Instagram Image Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Image Download": {
+      "main": [
+        [
+          {
+            "node": "Instagram Cross-Platform Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Cross-Platform Post": {
+      "main": [
+        [
+          {
+            "node": "Cross-Platform Analytics Logger",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Performance Analytics Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Cross-Platform Post": {
+      "main": [
+        [
+          {
+            "node": "Cross-Platform Analytics Logger",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Performance Analytics Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cross-Platform Analytics Logger": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cross-Platform Manual Webhook": {
+      "main": [
+        [
+          {
+            "node": "Platform Content Adapter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Notification": {
+      "main": [
+        [
+          {
+            "node": "Cross-Platform Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cross-platform-automation-workflow"
+  },
+  "id": "cross-platform-automation",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "social-media",
+      "name": "Social Media"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "Automation"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "cross-platform",
+      "name": "Cross-Platform"
+    }
+  ]
+}

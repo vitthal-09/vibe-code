@@ -1,0 +1,466 @@
+{
+  "name": "Instagram Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "instagram-schedule",
+      "name": "Schedule Trigger - Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAllSheets",
+        "documentId": {
+          "__rl": true,
+          "value": "your-instagram-content-sheet-id",
+          "mode": "id"
+        }
+      },
+      "id": "instagram-content-source",
+      "name": "Instagram Content Source",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Instagram content processor with hashtag optimization\nconst items = $input.all();\nconst processedItems = [];\n\n// Popular hashtag collections by category\nconst hashtagSets = {\n  business: ['#entrepreneur', '#business', '#startup', '#marketing', '#growth', '#success', '#innovation', '#leadership'],\n  tech: ['#technology', '#tech', '#AI', '#innovation', '#digital', '#coding', '#startup', '#future'],\n  lifestyle: ['#lifestyle', '#inspiration', '#motivation', '#wellness', '#mindset', '#selfcare', '#positivity', '#growth'],\n  general: ['#instagood', '#photooftheday', '#follow', '#like', '#instadaily', '#picoftheday', '#followme', '#repost']\n};\n\nfor (const item of items) {\n  const caption = item.json.caption || item.json.content || '';\n  const imageUrl = item.json.image_url || item.json.imageUrl || '';\n  const category = item.json.category || 'general';\n  const scheduledTime = item.json.scheduled_time || null;\n  \n  if (caption && imageUrl) {\n    // Generate hashtags based on category\n    const selectedHashtags = hashtagSets[category] || hashtagSets.general;\n    const hashtags = selectedHashtags.slice(0, 10).join(' ');\n    \n    // Create optimized caption\n    const optimizedCaption = `${caption}\\n\\n${hashtags}`;\n    \n    // Validate caption length (Instagram limit: 2200 characters)\n    const finalCaption = optimizedCaption.length > 2200 \n      ? optimizedCaption.substring(0, 2197) + '...' \n      : optimizedCaption;\n    \n    processedItems.push({\n      json: {\n        ...item.json,\n        caption: finalCaption,\n        originalCaption: caption,\n        hashtags: hashtags,\n        imageUrl: imageUrl,\n        category: category,\n        scheduledTime: scheduledTime,\n        processed: true\n      }\n    });\n  }\n}\n\nreturn processedItems;"
+      },
+      "id": "instagram-processor",
+      "name": "Instagram Content Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-validation",
+              "leftValue": "={{$json.processed}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            },
+            {
+              "id": "image-validation",
+              "leftValue": "={{$json.imageUrl}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "content-validator",
+      "name": "Content Validator",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.imageUrl}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-image",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "upload",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{$json.caption}}"
+        }
+      },
+      "id": "instagram-post",
+      "name": "Instagram - Create Post",
+      "type": "n8n-nodes-base.instagram",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "instagramBasicDisplayApi": {
+          "id": "instagram-credentials",
+          "name": "Instagram Basic Display API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "story",
+        "operation": "create",
+        "mediaUrl": "={{$json.imageUrl}}",
+        "additionalFields": {
+          "caption": "={{$json.originalCaption.substring(0, 100)}}..."
+        }
+      },
+      "id": "instagram-story",
+      "name": "Instagram - Create Story",
+      "type": "n8n-nodes-base.instagram",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        400
+      ],
+      "credentials": {
+        "instagramBasicDisplayApi": {
+          "id": "instagram-credentials",
+          "name": "Instagram Basic Display API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "your-instagram-analytics-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": "Instagram Analytics",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{new Date().toISOString().split('T')[0]}}",
+            "Time": "={{new Date().toISOString().split('T')[1].split('.')[0]}}",
+            "Post Caption": "={{$json.originalCaption}}",
+            "Hashtags": "={{$json.hashtags}}",
+            "Category": "={{$json.category}}",
+            "Post ID": "={{$json.id}}",
+            "Image URL": "={{$json.imageUrl}}",
+            "Status": "Posted Successfully"
+          }
+        },
+        "options": {}
+      },
+      "id": "instagram-analytics",
+      "name": "Log Instagram Analytics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1560,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "instagram-webhook",
+      "name": "Instagram Manual Post Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        600
+      ],
+      "webhookId": "instagram-manual-post"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\", \"message\": \"Instagram content posted successfully\", \"postId\": \"{{$json.id}}\", \"timestamp\": \"{{new Date().toISOString()}}\"}",
+        "options": {}
+      },
+      "id": "instagram-webhook-response",
+      "name": "Instagram Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "insights",
+        "operation": "getAccountInsights",
+        "period": "day",
+        "metrics": [
+          "impressions",
+          "reach",
+          "profile_views"
+        ]
+      },
+      "id": "instagram-insights",
+      "name": "Instagram - Get Insights",
+      "type": "n8n-nodes-base.instagram",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        600
+      ],
+      "credentials": {
+        "instagramBasicDisplayApi": {
+          "id": "instagram-credentials",
+          "name": "Instagram Basic Display API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "daily-insights-trigger",
+      "name": "Daily Insights Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "your-instagram-insights-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": "Daily Insights",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{new Date().toISOString().split('T')[0]}}",
+            "Impressions": "={{$json.impressions}}",
+            "Reach": "={{$json.reach}}",
+            "Profile Views": "={{$json.profile_views}}",
+            "Followers": "={{$json.follower_count}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "insights-logger",
+      "name": "Log Daily Insights",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1560,
+        800
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger - Every 12 Hours": {
+      "main": [
+        [
+          {
+            "node": "Instagram Content Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Content Source": {
+      "main": [
+        [
+          {
+            "node": "Instagram Content Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Content Processor": {
+      "main": [
+        [
+          {
+            "node": "Content Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Validator": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Instagram - Create Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Instagram - Create Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram - Create Post": {
+      "main": [
+        [
+          {
+            "node": "Log Instagram Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Manual Post Webhook": {
+      "main": [
+        [
+          {
+            "node": "Instagram Content Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Instagram Analytics": {
+      "main": [
+        [
+          {
+            "node": "Instagram Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Insights Trigger": {
+      "main": [
+        [
+          {
+            "node": "Instagram - Get Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram - Get Insights": {
+      "main": [
+        [
+          {
+            "node": "Log Daily Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "instagram-automation-workflow"
+  },
+  "id": "instagram-automation",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "social-media",
+      "name": "Social Media"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "Automation"
+    }
+  ]
+}

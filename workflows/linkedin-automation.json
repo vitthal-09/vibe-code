@@ -1,0 +1,337 @@
+{
+  "name": "LinkedIn Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 8
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger - Every 8 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "text": "={{$json.content}}",
+        "additionalFields": {
+          "visibility": "PUBLIC"
+        }
+      },
+      "id": "linkedin-post",
+      "name": "LinkedIn - Create Post",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAllSheets",
+        "documentId": {
+          "__rl": true,
+          "value": "your-google-sheet-id",
+          "mode": "id"
+        }
+      },
+      "id": "google-sheets-content",
+      "name": "Google Sheets - Get Content",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-check",
+              "leftValue": "={{$json.content}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "content-filter",
+      "name": "Content Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "person",
+        "operation": "getProfile"
+      },
+      "id": "linkedin-profile",
+      "name": "LinkedIn - Get Profile",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        680,
+        500
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "connection",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 50
+      },
+      "id": "linkedin-connections",
+      "name": "LinkedIn - Get Connections",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "your-analytics-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": "LinkedIn Analytics",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{new Date().toISOString().split('T')[0]}}",
+            "Post Content": "={{$json.content}}",
+            "Post ID": "={{$json.id}}",
+            "Visibility": "={{$json.visibility}}",
+            "Status": "Posted Successfully"
+          }
+        },
+        "options": {}
+      },
+      "id": "analytics-log",
+      "name": "Log Analytics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linkedin-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger - Manual Posts",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        600
+      ],
+      "webhookId": "linkedin-manual-post"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\", \"message\": \"LinkedIn post created successfully\", \"postId\": \"{{$json.id}}\"}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and validate LinkedIn content\nconst items = $input.all();\nconst processedItems = [];\n\nfor (const item of items) {\n  const content = item.json.content || item.json.message || '';\n  \n  // Validate content length for LinkedIn (3000 char limit)\n  if (content.length > 3000) {\n    processedItems.push({\n      json: {\n        ...item.json,\n        content: content.substring(0, 2997) + '...',\n        originalLength: content.length,\n        truncated: true\n      }\n    });\n  } else if (content.length > 0) {\n    processedItems.push({\n      json: {\n        ...item.json,\n        content: content,\n        originalLength: content.length,\n        truncated: false\n      }\n    });\n  }\n}\n\nreturn processedItems;"
+      },
+      "id": "content-processor",
+      "name": "Content Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger - Every 8 Hours": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Get Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Get Content": {
+      "main": [
+        [
+          {
+            "node": "Content Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Processor": {
+      "main": [
+        [
+          {
+            "node": "Content Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Filter": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn - Create Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn - Create Post": {
+      "main": [
+        [
+          {
+            "node": "Log Analytics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "LinkedIn - Get Connections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger - Manual Posts": {
+      "main": [
+        [
+          {
+            "node": "Content Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Analytics": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "linkedin-automation-workflow"
+  },
+  "id": "linkedin-automation",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "social-media",
+      "name": "Social Media"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "Automation"
+    }
+  ]
+}

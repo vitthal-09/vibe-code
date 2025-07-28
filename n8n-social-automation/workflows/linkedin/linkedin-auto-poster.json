@@ -1,0 +1,314 @@
+{
+  "name": "LinkedIn Auto-Poster",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "7b8f9e2a-1234-5678-9abc-def012345678",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM content_calendar WHERE platform = 'linkedin' AND status = 'pending' AND scheduled_time <= NOW() ORDER BY scheduled_time ASC LIMIT 5;",
+        "options": {}
+      },
+      "id": "8c9f0e3b-2345-6789-0bcd-ef1234567890",
+      "name": "Get Scheduled Posts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "text": "={{$json[\"content\"]}}",
+        "additionalFields": {
+          "visibility": "PUBLIC",
+          "lifecycleState": "PUBLISHED"
+        }
+      },
+      "id": "9d0f1e4c-3456-7890-1cde-f23456789012",
+      "name": "Create LinkedIn Post",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "2",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"media_url\"]}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "ae1f2e5d-4567-8901-2def-345678901234",
+      "name": "Has Media?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"media_url\"]}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "bf2f3e6e-5678-9012-3ef0-456789012345",
+      "name": "Download Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "upload",
+        "binaryPropertyName": "data"
+      },
+      "id": "c03f4e7f-6789-0123-4f01-567890123456",
+      "name": "Upload to LinkedIn",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "2",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "text": "={{$node[\"Get Scheduled Posts\"].json[\"content\"]}}",
+        "media": "={{$json[\"id\"]}}",
+        "additionalFields": {
+          "visibility": "PUBLIC",
+          "lifecycleState": "PUBLISHED"
+        }
+      },
+      "id": "d14f5e80-7890-1234-5012-678901234567",
+      "name": "Create Post with Media",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "2",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content_calendar SET status = 'published', published_at = NOW(), post_id = '{{$json[\"id\"]}}' WHERE id = {{$node[\"Get Scheduled Posts\"].json[\"id\"]}};",
+        "options": {}
+      },
+      "id": "e25f6e91-8901-2345-6123-789012345678",
+      "name": "Update Post Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [1650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "message",
+              "value": "Post published successfully"
+            },
+            {
+              "name": "post_id",
+              "value": "={{$json[\"id\"]}}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f36f7ea2-9012-3456-7234-890123456789",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error handling and logging\nconst error = $input.item.json.error || 'Unknown error';\nconst postId = $node[\"Get Scheduled Posts\"].json.id;\n\n// Log error to database\nawait $workflow.webhook.post('http://localhost:5678/webhook/error-log', {\n  workflow: 'LinkedIn Auto-Poster',\n  error: error,\n  post_id: postId,\n  timestamp: new Date().toISOString()\n});\n\nreturn {\n  status: 'error',\n  message: error,\n  post_id: postId\n};"
+      },
+      "id": "047f8eb3-0123-4567-8345-901234567890",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Scheduled Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scheduled Posts": {
+      "main": [
+        [
+          {
+            "node": "Has Media?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Media?": {
+      "main": [
+        [
+          {
+            "node": "Download Media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Media": {
+      "main": [
+        [
+          {
+            "node": "Upload to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Create Post with Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Update Post Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Post with Media": {
+      "main": [
+        [
+          {
+            "node": "Update Post Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Post Status": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler-workflow"
+  },
+  "versionId": "f8c9d7e6-5432-1098-7654-321098765432",
+  "id": "linkedin-auto-poster",
+  "meta": {
+    "instanceId": "8d3f2e1c-0987-6543-2109-876543210987"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "linkedin"
+    },
+    {
+      "id": "2",
+      "name": "automation"
+    },
+    {
+      "id": "3",
+      "name": "social-media"
+    }
+  ]
+}

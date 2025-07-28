@@ -1,0 +1,431 @@
+{
+  "name": "Instagram Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hour",
+              "value": 12
+            },
+            {
+              "field": "minute",
+              "value": 0
+            }
+          ]
+        }
+      },
+      "id": "instagram-scheduler",
+      "name": "Instagram Scheduler",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/media",
+        "authentication": "oAuth2",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "{{ $json.image_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "{{ $json.caption }}\n\n{{ $json.hashtags }}"
+            },
+            {
+              "name": "access_token",
+              "value": "{{ $json.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "create-instagram-post",
+      "name": "Create Instagram Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate relevant hashtags based on content\nconst content = $input.first().json.caption || '';\nconst keywords = content.toLowerCase().split(' ').filter(word => word.length > 3);\n\nconst hashtagCategories = {\n  business: ['#business', '#entrepreneur', '#startup', '#marketing', '#leadership'],\n  tech: ['#technology', '#innovation', '#digital', '#ai', '#automation'],\n  lifestyle: ['#lifestyle', '#motivation', '#success', '#growth', '#mindset'],\n  social: ['#socialmedia', '#instagram', '#linkedin', '#networking', '#community']\n};\n\nlet relevantHashtags = [];\n\n// Add hashtags based on content keywords\nkeywords.forEach(keyword => {\n  if (keyword.includes('business') || keyword.includes('entrepreneur')) {\n    relevantHashtags.push(...hashtagCategories.business);\n  }\n  if (keyword.includes('tech') || keyword.includes('digital')) {\n    relevantHashtags.push(...hashtagCategories.tech);\n  }\n  if (keyword.includes('life') || keyword.includes('success')) {\n    relevantHashtags.push(...hashtagCategories.lifestyle);\n  }\n});\n\n// Add general hashtags\nrelevantHashtags.push(...hashtagCategories.social);\n\n// Remove duplicates and limit to 30 hashtags\nconst uniqueHashtags = [...new Set(relevantHashtags)].slice(0, 30);\n\nreturn [{ json: { hashtags: uniqueHashtags.join(' ') } }];"
+      },
+      "id": "generate-hashtags",
+      "name": "Generate Hashtags",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.id }}/publish",
+        "authentication": "oAuth2",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "{{ $json.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "publish-instagram-post",
+      "name": "Publish Instagram Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/insights",
+        "authentication": "oAuth2",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "qs": {
+          "metric": "impressions,reach,profile_views,follower_count",
+          "period": "day",
+          "access_token": "{{ $json.access_token }}"
+        }
+      },
+      "id": "get-instagram-insights",
+      "name": "Get Instagram Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 200],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/media",
+        "authentication": "oAuth2",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "qs": {
+          "fields": "id,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
+          "access_token": "{{ $json.access_token }}"
+        }
+      },
+      "id": "get-recent-posts",
+      "name": "Get Recent Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 400],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate Instagram analytics report\nconst insights = $input.first().json;\nconst posts = $input.all()[1].json;\n\nconst report = {\n  timestamp: new Date().toISOString(),\n  insights: {\n    impressions: insights.data?.find(d => d.name === 'impressions')?.values?.[0]?.value || 0,\n    reach: insights.data?.find(d => d.name === 'reach')?.values?.[0]?.value || 0,\n    profileViews: insights.data?.find(d => d.name === 'profile_views')?.values?.[0]?.value || 0,\n    followerCount: insights.data?.find(d => d.name === 'follower_count')?.values?.[0]?.value || 0\n  },\n  posts: {\n    total: posts.data?.length || 0,\n    totalLikes: posts.data?.reduce((sum, post) => sum + (post.like_count || 0), 0) || 0,\n    totalComments: posts.data?.reduce((sum, post) => sum + (post.comments_count || 0), 0) || 0,\n    averageEngagement: posts.data?.length > 0 ? \n      (posts.data?.reduce((sum, post) => sum + (post.like_count || 0) + (post.comments_count || 0), 0) / posts.data?.length) || 0 : 0\n  },\n  recommendations: generateRecommendations(insights, posts)\n};\n\nfunction generateRecommendations(insights, posts) {\n  const recommendations = [];\n  \n  const avgEngagement = posts.data?.length > 0 ? \n    (posts.data?.reduce((sum, post) => sum + (post.like_count || 0) + (post.comments_count || 0), 0) / posts.data?.length) || 0 : 0;\n  \n  if (avgEngagement < 50) {\n    recommendations.push('Consider posting more engaging content with better visuals');\n  }\n  \n  if (insights.data?.find(d => d.name === 'follower_count')?.values?.[0]?.value < 1000) {\n    recommendations.push('Focus on growing your follower base with consistent posting');\n  }\n  \n  if (posts.data?.length < 30) {\n    recommendations.push('Increase posting frequency to maintain audience engagement');\n  }\n  \n  return recommendations;\n}\n\nreturn [{ json: report }];"
+      },
+      "id": "generate-instagram-analytics",
+      "name": "Generate Instagram Analytics",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR_SLACK_WEBHOOK",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "Instagram Automation Report: {{ $json.timestamp }}\n\nInsights:\n- Impressions: {{ $json.insights.impressions }}\n- Reach: {{ $json.insights.reach }}\n- Profile Views: {{ $json.insights.profileViews }}\n- Followers: {{ $json.insights.followerCount }}\n\nPosts:\n- Total Posts: {{ $json.posts.total }}\n- Total Likes: {{ $json.posts.totalLikes }}\n- Total Comments: {{ $json.posts.totalComments }}\n- Avg Engagement: {{ $json.posts.averageEngagement }}\n\nRecommendations:\n{{ $json.recommendations.join('\\n') }}"
+            }
+          ]
+        }
+      },
+      "id": "send-instagram-notification",
+      "name": "Send Instagram Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/stories",
+        "authentication": "oAuth2",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "STORY"
+            },
+            {
+              "name": "image_url",
+              "value": "{{ $json.story_image_url }}"
+            },
+            {
+              "name": "access_token",
+              "value": "{{ $json.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "create-instagram-story",
+      "name": "Create Instagram Story",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 500],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "post-success",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-post-success",
+      "name": "Check Post Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "content": "Instagram post failed to publish. Please check the configuration.",
+        "options": {}
+      },
+      "id": "instagram-error-notification",
+      "name": "Instagram Error Notification",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [680, 500]
+    }
+  ],
+  "connections": {
+    "Instagram Scheduler": {
+      "main": [
+        [
+          {
+            "node": "Generate Hashtags",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Instagram Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Instagram Post": {
+      "main": [
+        [
+          {
+            "node": "Check Post Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Post Success": {
+      "main": [
+        [
+          {
+            "node": "Publish Instagram Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Instagram Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Instagram Post": {
+      "main": [
+        [
+          {
+            "node": "Get Instagram Insights",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recent Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Instagram Insights": {
+      "main": [
+        [
+          {
+            "node": "Generate Instagram Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Posts": {
+      "main": [
+        [
+          {
+            "node": "Generate Instagram Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Instagram Analytics": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Hashtags": {
+      "main": [
+        [
+          {
+            "node": "Create Instagram Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "instagram-automation",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "instagram",
+      "name": "instagram"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "automation"
+    }
+  ]
+}

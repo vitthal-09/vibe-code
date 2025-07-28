@@ -1,0 +1,483 @@
+{
+  "name": "Instagram Content Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM content_calendar WHERE platform = 'instagram' AND status = 'pending' AND scheduled_time <= NOW() ORDER BY scheduled_time ASC LIMIT 10;",
+        "options": {}
+      },
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "name": "Get Scheduled Content",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"content_type\"]}}",
+              "operation": "equals",
+              "value2": "post"
+            }
+          ]
+        }
+      },
+      "id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "name": "Content Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{$json[\"media_url\"]}}"
+            },
+            {
+              "name": "caption",
+              "value": "={{$json[\"caption\"]}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4d5e6f7a-8b9c-0d1e-2f3a4b5c6d7e8f90",
+      "name": "Create Media Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "Instagram Graph API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media_publish",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{$json[\"id\"]}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b5c6d7e8f9012",
+      "name": "Publish Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "STORIES"
+            },
+            {
+              "name": "image_url",
+              "value": "={{$json[\"media_url\"]}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6f7a8b9c-0d1e-2f3a-4b5c6d7e8f901234",
+      "name": "Create Story Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media_publish",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{$json[\"id\"]}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7a8b9c0d-1e2f-3a4b-5c6d7e8f90123456",
+      "name": "Publish Story",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "REELS"
+            },
+            {
+              "name": "video_url",
+              "value": "={{$json[\"media_url\"]}}"
+            },
+            {
+              "name": "caption",
+              "value": "={{$json[\"caption\"]}}"
+            },
+            {
+              "name": "share_to_feed",
+              "value": "true"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8b9c0d1e-2f3a-4b5c-6d7e8f9012345678",
+      "name": "Create Reel Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Wait for video processing\nconst containerId = $json.id;\nconst maxAttempts = 30;\nlet attempt = 0;\nlet status = 'IN_PROGRESS';\n\nwhile (status === 'IN_PROGRESS' && attempt < maxAttempts) {\n  await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds\n  \n  const response = await $workflow.httpRequest({\n    url: `https://graph.facebook.com/v18.0/${containerId}`,\n    method: 'GET',\n    qs: {\n      fields: 'status_code',\n      access_token: $credentials.access_token\n    }\n  });\n  \n  status = response.status_code;\n  attempt++;\n}\n\nif (status === 'FINISHED') {\n  return { id: containerId, status: 'ready' };\n} else {\n  throw new Error(`Video processing failed with status: ${status}`);\n}"
+      },
+      "id": "9c0d1e2f-3a4b-5c6d-7e8f901234567890",
+      "name": "Wait for Video Processing",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{$credentials.instagram_business_account_id}}/media_publish",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{$json[\"id\"]}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$credentials.access_token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0d1e2f3a-4b5c-6d7e-8f90123456789012",
+      "name": "Publish Reel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content_calendar SET status = 'published', published_at = NOW(), post_id = '{{$json[\"id\"]}}', engagement_initial = 0 WHERE id = {{$node[\"Get Scheduled Content\"].json[\"id\"]}};",
+        "options": {}
+      },
+      "id": "1e2f3a4b-5c6d-7e8f-9012345678901234",
+      "name": "Update Content Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [1450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Add hashtags processing\nconst caption = $json.caption;\nconst hashtags = $json.hashtags ? JSON.parse($json.hashtags) : [];\n\n// Combine caption with hashtags\nlet fullCaption = caption;\nif (hashtags.length > 0) {\n  fullCaption += '\\n\\n' + hashtags.map(tag => `#${tag}`).join(' ');\n}\n\n// Truncate if too long (Instagram limit is 2200 characters)\nif (fullCaption.length > 2200) {\n  fullCaption = fullCaption.substring(0, 2197) + '...';\n}\n\nreturn {\n  ...items[0].json,\n  caption: fullCaption\n};"
+      },
+      "id": "2f3a4b5c-6d7e-8f90-123456789012345",
+      "name": "Process Hashtags",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [550, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "workflow",
+              "value": "Instagram Content Publisher"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "published_count",
+              "value": "={{$items.length}}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a4b5c6d-7e8f-9012-3456789012345678",
+      "name": "Success Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error handling and retry logic\nconst error = $json.error || 'Unknown error';\nconst contentId = $node[\"Get Scheduled Content\"].json.id;\nconst retryCount = $node[\"Get Scheduled Content\"].json.retry_count || 0;\n\nif (retryCount < 3) {\n  // Update retry count and reschedule\n  await $workflow.postgres.executeQuery({\n    query: `UPDATE content_calendar SET retry_count = ${retryCount + 1}, scheduled_time = NOW() + INTERVAL '30 minutes' WHERE id = ${contentId}`\n  });\n} else {\n  // Mark as failed after 3 retries\n  await $workflow.postgres.executeQuery({\n    query: `UPDATE content_calendar SET status = 'failed', error_message = '${error}' WHERE id = ${contentId}`\n  });\n}\n\nreturn {\n  status: 'error',\n  message: error,\n  content_id: contentId,\n  retry_count: retryCount\n};"
+      },
+      "id": "4b5c6d7e-8f90-1234-56789012345678901",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Scheduled Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scheduled Content": {
+      "main": [
+        [
+          {
+            "node": "Process Hashtags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Hashtags": {
+      "main": [
+        [
+          {
+            "node": "Content Type Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Type Router": {
+      "main": [
+        [
+          {
+            "node": "Create Media Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Story Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Reel Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Media Container": {
+      "main": [
+        [
+          {
+            "node": "Publish Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Post": {
+      "main": [
+        [
+          {
+            "node": "Update Content Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Story Container": {
+      "main": [
+        [
+          {
+            "node": "Publish Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Story": {
+      "main": [
+        [
+          {
+            "node": "Update Content Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Reel Container": {
+      "main": [
+        [
+          {
+            "node": "Wait for Video Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Video Processing": {
+      "main": [
+        [
+          {
+            "node": "Publish Reel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Reel": {
+      "main": [
+        [
+          {
+            "node": "Update Content Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Content Status": {
+      "main": [
+        [
+          {
+            "node": "Success Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler-workflow"
+  },
+  "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id": "instagram-content-publisher",
+  "meta": {
+    "instanceId": "9f8e7d6c-5b4a-3210-9876-543210fedcba"
+  },
+  "tags": [
+    {
+      "id": "4",
+      "name": "instagram"
+    },
+    {
+      "id": "2",
+      "name": "automation"
+    },
+    {
+      "id": "3",
+      "name": "social-media"
+    }
+  ]
+}

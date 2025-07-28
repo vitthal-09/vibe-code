@@ -1,0 +1,341 @@
+{
+  "name": "LinkedIn Analytics Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "analytics-trigger-001",
+      "name": "Analytics Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, post_id, platform FROM content_calendar WHERE platform = 'linkedin' AND status = 'published' AND published_at > NOW() - INTERVAL '7 days' ORDER BY published_at DESC;",
+        "options": {}
+      },
+      "id": "get-recent-posts-002",
+      "name": "Get Recent Posts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "getAnalytics",
+        "postId": "={{$json[\"post_id\"]}}",
+        "additionalFields": {
+          "metrics": [
+            "impressionCount",
+            "clickCount",
+            "engagement",
+            "likeCount",
+            "commentCount",
+            "shareCount"
+          ]
+        }
+      },
+      "id": "fetch-post-analytics-003",
+      "name": "Fetch Post Analytics",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "2",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process and structure analytics data\nconst contentId = $node[\"Get Recent Posts\"].json.id;\nconst postId = $node[\"Get Recent Posts\"].json.post_id;\nconst analytics = $json;\n\n// Extract metrics\nconst metrics = [\n  {\n    metric_type: 'impressions',\n    metric_value: analytics.impressionCount || 0\n  },\n  {\n    metric_type: 'clicks',\n    metric_value: analytics.clickCount || 0\n  },\n  {\n    metric_type: 'likes',\n    metric_value: analytics.likeCount || 0\n  },\n  {\n    metric_type: 'comments',\n    metric_value: analytics.commentCount || 0\n  },\n  {\n    metric_type: 'shares',\n    metric_value: analytics.shareCount || 0\n  }\n];\n\n// Calculate engagement rate\nconst totalEngagement = analytics.likeCount + analytics.commentCount + analytics.shareCount;\nconst engagementRate = analytics.impressionCount > 0 ? \n  (totalEngagement / analytics.impressionCount * 100).toFixed(2) : 0;\n\nreturn metrics.map(metric => ({\n  content_id: contentId,\n  post_id: postId,\n  platform: 'linkedin',\n  ...metric,\n  engagement_rate: engagementRate,\n  recorded_at: new Date().toISOString()\n}));"
+      },
+      "id": "process-analytics-004",
+      "name": "Process Analytics Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO engagement_analytics (platform, post_id, content_id, metric_type, metric_value, recorded_at) VALUES ('{{$json[\"platform\"]}}', '{{$json[\"post_id\"]}}', {{$json[\"content_id\"]}}, '{{$json[\"metric_type\"]}}', {{$json[\"metric_value\"]}}, '{{$json[\"recorded_at\"]}}') ON DUPLICATE KEY UPDATE metric_value = {{$json[\"metric_value\"]}}, recorded_at = '{{$json[\"recorded_at\"]}}';",
+        "options": {}
+      },
+      "id": "store-analytics-005",
+      "name": "Store Analytics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [1050, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "profile",
+        "operation": "getAnalytics",
+        "timeRange": "PAST_30_DAYS",
+        "additionalFields": {
+          "metrics": [
+            "profileViews",
+            "uniqueVisitors",
+            "searchAppearances"
+          ]
+        }
+      },
+      "id": "fetch-profile-analytics-006",
+      "name": "Fetch Profile Analytics",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [650, 500],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "2",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Get hashtags from recent posts and update performance\nconst posts = $items(\"Get Recent Posts\");\nconst hashtagData = [];\n\nfor (const post of posts) {\n  if (post.json.hashtags) {\n    const hashtags = JSON.parse(post.json.hashtags);\n    const analytics = $items(\"Process Analytics Data\").find(\n      item => item.json.post_id === post.json.post_id\n    );\n    \n    if (analytics) {\n      const reach = analytics.json.metric_value || 0;\n      const engagement = analytics.json.engagement_rate || 0;\n      \n      for (const hashtag of hashtags) {\n        hashtagData.push({\n          platform: 'linkedin',\n          hashtag: hashtag,\n          reach: reach,\n          engagement: engagement\n        });\n      }\n    }\n  }\n}\n\nreturn hashtagData;"
+      },
+      "id": "process-hashtags-007",
+      "name": "Process Hashtag Performance",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Call stored procedure to update hashtag performance\nconst hashtagData = $json;\n\nif (hashtagData.length > 0) {\n  const hashtags = JSON.stringify(hashtagData.map(h => h.hashtag));\n  const totalReach = hashtagData.reduce((sum, h) => sum + h.reach, 0);\n  const avgEngagement = hashtagData.reduce((sum, h) => sum + h.engagement, 0) / hashtagData.length;\n  \n  return {\n    platform: 'linkedin',\n    hashtags: hashtags,\n    reach: totalReach,\n    engagement: Math.round(avgEngagement)\n  };\n}\n\nreturn { skip: true };"
+      },
+      "id": "prepare-hashtag-update-008",
+      "name": "Prepare Hashtag Update",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CALL update_hashtag_performance('{{$json[\"platform\"]}}', '{{$json[\"hashtags\"]}}', {{$json[\"reach\"]}}, {{$json[\"engagement\"]}});",
+        "options": {}
+      },
+      "id": "update-hashtags-009",
+      "name": "Update Hashtag Performance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [1650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate analytics report\nconst profileAnalytics = $items(\"Fetch Profile Analytics\")[0]?.json || {};\nconst postsAnalyzed = $items(\"Get Recent Posts\").length;\nconst totalImpressions = $items(\"Process Analytics Data\")\n  .filter(item => item.json.metric_type === 'impressions')\n  .reduce((sum, item) => sum + item.json.metric_value, 0);\n\nconst totalEngagement = $items(\"Process Analytics Data\")\n  .filter(item => ['likes', 'comments', 'shares'].includes(item.json.metric_type))\n  .reduce((sum, item) => sum + item.json.metric_value, 0);\n\nconst report = {\n  workflow: 'LinkedIn Analytics Tracker',\n  execution_time: new Date().toISOString(),\n  summary: {\n    posts_analyzed: postsAnalyzed,\n    total_impressions: totalImpressions,\n    total_engagement: totalEngagement,\n    avg_engagement_rate: totalImpressions > 0 ? \n      (totalEngagement / totalImpressions * 100).toFixed(2) : 0,\n    profile_views: profileAnalytics.profileViews || 0,\n    unique_visitors: profileAnalytics.uniqueVisitors || 0\n  },\n  status: 'success'\n};\n\nreturn report;"
+      },
+      "id": "generate-report-010",
+      "name": "Generate Analytics Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (workflow_name, status, message, items_processed, execution_time_ms) VALUES ('LinkedIn Analytics Tracker', 'success', '{{$json[\"summary\"] | toJson}}', {{$json[\"summary\"][\"posts_analyzed\"]}}, {{Date.now() - $workflow.startedAt}});",
+        "options": {}
+      },
+      "id": "log-execution-011",
+      "name": "Log Execution",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [2050, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error handling\nconst error = $json.error || 'Unknown error occurred';\nconst context = {\n  workflow: 'LinkedIn Analytics Tracker',\n  error: error,\n  timestamp: new Date().toISOString(),\n  node: $executionId\n};\n\n// Log error to database\nawait $workflow.postgres.executeQuery({\n  query: `INSERT INTO automation_logs (workflow_name, status, message, error_details) VALUES ('LinkedIn Analytics Tracker', 'failed', '${error}', '${JSON.stringify(context)}')`\n});\n\nreturn context;"
+      },
+      "id": "error-handler-012",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 600]
+    }
+  ],
+  "connections": {
+    "Analytics Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Posts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Profile Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Posts": {
+      "main": [
+        [
+          {
+            "node": "Fetch Post Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Post Analytics": {
+      "main": [
+        [
+          {
+            "node": "Process Analytics Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Analytics Data": {
+      "main": [
+        [
+          {
+            "node": "Store Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Analytics": {
+      "main": [
+        [
+          {
+            "node": "Process Hashtag Performance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Hashtag Performance": {
+      "main": [
+        [
+          {
+            "node": "Prepare Hashtag Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Hashtag Update": {
+      "main": [
+        [
+          {
+            "node": "Update Hashtag Performance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Hashtag Performance": {
+      "main": [
+        [
+          {
+            "node": "Generate Analytics Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Profile Analytics": {
+      "main": [
+        [
+          {
+            "node": "Generate Analytics Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Analytics Report": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler-workflow"
+  },
+  "versionId": "analytics-v1-2023",
+  "id": "linkedin-analytics-tracker",
+  "meta": {
+    "instanceId": "analytics-instance-001"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "linkedin"
+    },
+    {
+      "id": "5",
+      "name": "analytics"
+    },
+    {
+      "id": "3",
+      "name": "social-media"
+    }
+  ]
+}

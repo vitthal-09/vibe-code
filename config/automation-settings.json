@@ -1,0 +1,228 @@
+{
+  "linkedin": {
+    "posting": {
+      "optimalTimes": [
+        {
+          "day": "monday",
+          "time": "09:00"
+        },
+        {
+          "day": "tuesday",
+          "time": "09:00"
+        },
+        {
+          "day": "wednesday",
+          "time": "09:00"
+        },
+        {
+          "day": "thursday",
+          "time": "09:00"
+        },
+        {
+          "day": "friday",
+          "time": "09:00"
+        }
+      ],
+      "contentTypes": [
+        "professional_insights",
+        "industry_news",
+        "career_tips",
+        "company_updates"
+      ],
+      "maxPostsPerDay": 2,
+      "minPostLength": 100,
+      "maxPostLength": 3000
+    },
+    "engagement": {
+      "trackMetrics": [
+        "likes",
+        "comments",
+        "shares",
+        "views",
+        "clicks"
+      ],
+      "responseTime": "2_hours",
+      "autoRespond": false
+    },
+    "networking": {
+      "maxConnectionRequestsPerDay": 50,
+      "personalizedMessages": true,
+      "followUpDelay": "3_days"
+    }
+  },
+  "instagram": {
+    "posting": {
+      "optimalTimes": [
+        {
+          "day": "monday",
+          "time": "12:00"
+        },
+        {
+          "day": "tuesday",
+          "time": "12:00"
+        },
+        {
+          "day": "wednesday",
+          "time": "12:00"
+        },
+        {
+          "day": "thursday",
+          "time": "12:00"
+        },
+        {
+          "day": "friday",
+          "time": "12:00"
+        },
+        {
+          "day": "saturday",
+          "time": "10:00"
+        },
+        {
+          "day": "sunday",
+          "time": "10:00"
+        }
+      ],
+      "contentTypes": [
+        "behind_scenes",
+        "product_showcase",
+        "team_highlights",
+        "industry_tips",
+        "lifestyle_content"
+      ],
+      "maxPostsPerDay": 3,
+      "maxStoriesPerDay": 5,
+      "hashtagStrategy": {
+        "maxHashtags": 30,
+        "minHashtags": 15,
+        "categories": [
+          "business",
+          "industry",
+          "lifestyle",
+          "brand"
+        ]
+      }
+    },
+    "engagement": {
+      "trackMetrics": [
+        "likes",
+        "comments",
+        "saves",
+        "shares",
+        "reach",
+        "impressions"
+      ],
+      "responseTime": "1_hour",
+      "autoRespond": true
+    }
+  },
+  "crossPlatform": {
+    "sync": {
+      "enabled": true,
+      "frequency": "daily",
+      "contentOptimization": {
+        "linkedinToInstagram": {
+          "removeCitations": true,
+          "removeUrls": true,
+          "addHashtags": true,
+          "maxLength": 2200
+        },
+        "instagramToLinkedin": {
+          "removeHashtags": true,
+          "removeEmojis": true,
+          "addProfessionalContext": true,
+          "minLength": 100
+        }
+      }
+    },
+    "analytics": {
+      "trackCrossPlatformPerformance": true,
+      "generateWeeklyReports": true,
+      "identifyTopPerformingContent": true
+    }
+  },
+  "notifications": {
+    "slack": {
+      "enabled": true,
+      "webhookUrl": "YOUR_SLACK_WEBHOOK_URL",
+      "channels": [
+        "social-media-reports",
+        "automation-alerts"
+      ]
+    },
+    "email": {
+      "enabled": false,
+      "recipients": [],
+      "frequency": "weekly"
+    }
+  },
+  "contentCalendar": {
+    "enabled": true,
+    "sources": [
+      "google_calendar",
+      "notion",
+      "airtable"
+    ],
+    "autoSchedule": true,
+    "contentTemplates": {
+      "linkedin": [
+        "industry_insight",
+        "career_tip",
+        "company_update",
+        "thought_leadership"
+      ],
+      "instagram": [
+        "behind_scenes",
+        "product_showcase",
+        "team_highlight",
+        "lifestyle"
+      ]
+    }
+  },
+  "optimization": {
+    "ai": {
+      "enabled": true,
+      "features": [
+        "hashtag_generation",
+        "content_optimization",
+        "timing_optimization",
+        "audience_analysis"
+      ]
+    },
+    "a_b_testing": {
+      "enabled": true,
+      "testTypes": [
+        "posting_times",
+        "content_types",
+        "hashtag_combinations"
+      ]
+    }
+  },
+  "compliance": {
+    "gdpr": {
+      "enabled": true,
+      "dataRetention": "30_days",
+      "userConsent": true
+    },
+    "rateLimiting": {
+      "enabled": true,
+      "maxRequestsPerHour": 100,
+      "maxRequestsPerDay": 1000
+    }
+  },
+  "monitoring": {
+    "healthChecks": {
+      "enabled": true,
+      "frequency": "hourly",
+      "alerts": {
+        "apiErrors": true,
+        "rateLimitWarnings": true,
+        "contentFailures": true
+      }
+    },
+    "performance": {
+      "trackExecutionTime": true,
+      "trackSuccessRate": true,
+      "generateMetrics": true
+    }
+  }
+}

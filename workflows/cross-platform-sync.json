@@ -1,0 +1,444 @@
+{
+  "name": "Cross-Platform Content Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hour",
+              "value": 8
+            },
+            {
+              "field": "minute",
+              "value": 0
+            }
+          ]
+        }
+      },
+      "id": "sync-scheduler",
+      "name": "Sync Scheduler",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "oAuth2",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Restli-Protocol-Version",
+              "value": "2.0.0"
+            }
+          ]
+        },
+        "qs": {
+          "authors": "urn:li:person:{{ $json.authorId }}",
+          "count": 10
+        }
+      },
+      "id": "get-linkedin-posts",
+      "name": "Get LinkedIn Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 200],
+      "credentials": {
+        "linkedinOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/media",
+        "authentication": "oAuth2",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "qs": {
+          "fields": "id,media_type,media_url,thumbnail_url,permalink,timestamp,caption",
+          "access_token": "{{ $json.access_token }}"
+        }
+      },
+      "id": "get-instagram-posts",
+      "name": "Get Instagram Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 400],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Analyze content and determine cross-platform strategy\nconst linkedinPosts = $input.first().json;\nconst instagramPosts = $input.all()[1].json;\n\n// Find content that hasn't been cross-posted\nconst linkedinContent = linkedinPosts.elements?.map(post => ({\n  id: post.id,\n  content: post.specificContent?.['com.linkedin.ugc.ShareContent']?.shareCommentary?.text || '',\n  timestamp: post.created.time,\n  platform: 'linkedin'\n})) || [];\n\nconst instagramContent = instagramPosts.data?.map(post => ({\n  id: post.id,\n  content: post.caption || '',\n  timestamp: post.timestamp,\n  platform: 'instagram'\n})) || [];\n\n// Find content suitable for cross-posting\nconst crossPostCandidates = [];\n\n// LinkedIn to Instagram candidates\nlinkedinContent.forEach(post => {\n  if (post.content.length > 50 && post.content.length < 2200) {\n    // Instagram caption limit is 2200 characters\n    crossPostCandidates.push({\n      ...post,\n      targetPlatform: 'instagram',\n      optimizedContent: optimizeForInstagram(post.content)\n    });\n  }\n});\n\n// Instagram to LinkedIn candidates\ninstagramContent.forEach(post => {\n  if (post.content.length > 100) {\n    // LinkedIn prefers longer, more professional content\n    crossPostCandidates.push({\n      ...post,\n      targetPlatform: 'linkedin',\n      optimizedContent: optimizeForLinkedIn(post.content)\n    });\n  }\n});\n\nfunction optimizeForInstagram(content) {\n  // Remove LinkedIn-specific formatting\n  let optimized = content\n    .replace(/\\[\\d+\\]/g, '') // Remove citation numbers\n    .replace(/https?:\\/\\/[^\\s]+/g, '') // Remove URLs\n    .trim();\n  \n  // Add relevant hashtags\n  const hashtags = generateInstagramHashtags(optimized);\n  return `${optimized}\\n\\n${hashtags}`;\n}\n\nfunction optimizeForLinkedIn(content) {\n  // Remove Instagram hashtags and emojis\n  let optimized = content\n    .replace(/#[\\w]+/g, '') // Remove hashtags\n    .replace(/[\\u{1F600}-\\u{1F64F}]|[\\u{1F300}-\\u{1F5FF}]|[\\u{1F680}-\\u{1F6FF}]|[\\u{1F1E0}-\\u{1F1FF}]|[\\u{2600}-\\u{26FF}]|[\\u{2700}-\\u{27BF}]/gu, '') // Remove emojis\n    .trim();\n  \n  // Add professional context\n  return `📱 Originally shared on Instagram:\\n\\n${optimized}\\n\\n#CrossPlatform #SocialMedia #DigitalMarketing`;\n}\n\nfunction generateInstagramHashtags(content) {\n  const hashtagCategories = {\n    business: ['#business', '#entrepreneur', '#startup', '#marketing'],\n    tech: ['#technology', '#innovation', '#digital', '#ai'],\n    lifestyle: ['#lifestyle', '#motivation', '#success', '#growth']\n  };\n  \n  const keywords = content.toLowerCase().split(' ').filter(word => word.length > 3);\n  let relevantHashtags = [];\n  \n  keywords.forEach(keyword => {\n    if (keyword.includes('business') || keyword.includes('entrepreneur')) {\n      relevantHashtags.push(...hashtagCategories.business);\n    }\n    if (keyword.includes('tech') || keyword.includes('digital')) {\n      relevantHashtags.push(...hashtagCategories.tech);\n    }\n  });\n  \n  return [...new Set(relevantHashtags)].slice(0, 15).join(' ');\n}\n\nreturn [{ json: { crossPostCandidates } }];"
+      },
+      "id": "analyze-content",
+      "name": "Analyze Content for Cross-Posting",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-candidates",
+              "leftValue": "={{ $json.crossPostCandidates.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "greater"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-candidates",
+      "name": "Check for Cross-Post Candidates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter candidates for LinkedIn to Instagram\nconst candidates = $input.first().json.crossPostCandidates;\nconst linkedinToInstagram = candidates.filter(c => c.targetPlatform === 'instagram');\n\nreturn [{ json: { linkedinToInstagram } }];"
+      },
+      "id": "filter-linkedin-to-instagram",
+      "name": "Filter LinkedIn to Instagram",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter candidates for Instagram to LinkedIn\nconst candidates = $input.first().json.crossPostCandidates;\nconst instagramToLinkedin = candidates.filter(c => c.targetPlatform === 'linkedin');\n\nreturn [{ json: { instagramToLinkedin } }];"
+      },
+      "id": "filter-instagram-to-linkedin",
+      "name": "Filter Instagram to LinkedIn",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.instagram_business_account_id }}/media",
+        "authentication": "oAuth2",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "{{ $json.image_url || 'https://via.placeholder.com/1080x1080' }}"
+            },
+            {
+              "name": "caption",
+              "value": "{{ $json.optimizedContent }}"
+            },
+            {
+              "name": "access_token",
+              "value": "{{ $json.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "post-to-instagram",
+      "name": "Post to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 200],
+      "credentials": {
+        "instagramOAuth2Api": {
+          "id": "instagram-credentials",
+          "name": "Instagram OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "oAuth2",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Restli-Protocol-Version",
+              "value": "2.0.0"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author",
+              "value": "urn:li:person:{{ $json.authorId }}"
+            },
+            {
+              "name": "lifecycleState",
+              "value": "PUBLISHED"
+            },
+            {
+              "name": "specificContent",
+              "value": "={{ { \"com.linkedin.ugc.ShareContent\": { \"shareCommentary\": { \"text\": \"{{ $json.optimizedContent }}\" }, \"shareMediaCategory\": \"NONE\" } } }}"
+            },
+            {
+              "name": "visibility",
+              "value": "={ \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\" }"
+            }
+          ]
+        }
+      },
+      "id": "post-to-linkedin",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 400],
+      "credentials": {
+        "linkedinOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate cross-platform sync report\nconst linkedinToInstagram = $input.first().json;\nconst instagramToLinkedin = $input.all()[1].json;\n\nconst report = {\n  timestamp: new Date().toISOString(),\n  syncSummary: {\n    linkedinToInstagram: linkedinToInstagram.length,\n    instagramToLinkedin: instagramToLinkedin.length,\n    totalCrossPosts: linkedinToInstagram.length + instagramToLinkedin.length\n  },\n  recommendations: generateSyncRecommendations(linkedinToInstagram, instagramToLinkedin)\n};\n\nfunction generateSyncRecommendations(linkedinToInstagram, instagramToLinkedin) {\n  const recommendations = [];\n  \n  if (linkedinToInstagram.length === 0) {\n    recommendations.push('Consider creating more LinkedIn content suitable for Instagram');\n  }\n  \n  if (instagramToLinkedin.length === 0) {\n    recommendations.push('Consider creating more Instagram content suitable for LinkedIn');\n  }\n  \n  if (linkedinToInstagram.length + instagramToLinkedin.length < 5) {\n    recommendations.push('Increase content creation frequency for better cross-platform reach');\n  }\n  \n  return recommendations;\n}\n\nreturn [{ json: report }];"
+      },
+      "id": "generate-sync-report",
+      "name": "Generate Sync Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR_SLACK_WEBHOOK",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "Cross-Platform Sync Report: {{ $json.timestamp }}\\n\\nSync Summary:\\n- LinkedIn to Instagram: {{ $json.syncSummary.linkedinToInstagram }}\\n- Instagram to LinkedIn: {{ $json.syncSummary.instagramToLinkedin }}\\n- Total Cross-Posts: {{ $json.syncSummary.totalCrossPosts }}\\n\\nRecommendations:\\n{{ $json.recommendations.join('\\n') }}"
+            }
+          ]
+        }
+      },
+      "id": "send-sync-notification",
+      "name": "Send Sync Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "content": "No content suitable for cross-posting found.",
+        "options": {}
+      },
+      "id": "no-candidates-notification",
+      "name": "No Candidates Notification",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 500]
+    }
+  ],
+  "connections": {
+    "Sync Scheduler": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Posts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Instagram Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn Posts": {
+      "main": [
+        [
+          {
+            "node": "Analyze Content for Cross-Posting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Instagram Posts": {
+      "main": [
+        [
+          {
+            "node": "Analyze Content for Cross-Posting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Content for Cross-Posting": {
+      "main": [
+        [
+          {
+            "node": "Check for Cross-Post Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Cross-Post Candidates": {
+      "main": [
+        [
+          {
+            "node": "Filter LinkedIn to Instagram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Instagram to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Candidates Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter LinkedIn to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Post to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Instagram to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Generate Sync Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Generate Sync Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Sync Report": {
+      "main": [
+        [
+          {
+            "node": "Send Sync Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "cross-platform-sync",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "sync",
+      "name": "sync"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "automation"
+    }
+  ]
+}
